@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>💬 Анонимный чат</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #1a1f2b, #0d1117);
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+    h2 {
+      text-align: center;
+      color: #58a6ff;
+      margin-bottom: 10px;
+      text-shadow: 0 0 8px rgba(88,166,255,0.6);
+    }
+    p { text-align: center; margin-bottom: 20px; }
+    .section {
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      background: rgba(22,27,34,0.85);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .section:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+    .section h3 {
+      margin-top: 0;
+      color: #79c0ff;
+      border-bottom: 1px solid #30363d;
+      padding-bottom: 5px;
+    }
+    .room-card {
+      border: 1px solid #30363d;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #21262d, #161b22);
+      transition: transform 0.2s ease;
+    }
+    .room-card:hover { transform: translateX(5px); }
+    .room-card.private { background: linear-gradient(135deg, #3b1f1f, #161b22); border-color: #ff7b72; }
+    input, button {
+      margin: 5px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #e6edf3;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    input:focus { border-color: #58a6ff; box-shadow: 0 0 8px rgba(88,166,255,0.6); outline: none; }
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #238636, #2ea043);
+      border: none;
+      color: #fff;
+      font-weight: bold;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    button:hover { transform: scale(1.05); box-shadow: 0 0 12px rgba(46,160,67,0.6); }
+    #adminBtn {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>💬 Анонимный чат</h2>
+  <p>Вы: <strong>{{ username }}</strong></p>
+
+  <!-- Кнопка входа в режим администратора -->
+  <button id="adminBtn">🔑 Админ</button>
+
+  <!-- Список комнат -->
+  <div class="section" id="roomlist">
+    <h3>📋 Список комнат</h3>
+    <div id="openRooms"><h4>🔓 Открытые</h4></div>
+    <div id="privateRooms"><h4>🔐 Приватные</h4></div>
+  </div>
+
+  <!-- Создание новой комнаты -->
+  <div class="section" id="create-room">
+    <h3>➕ Создать комнату</h3>
+    <input id="newroom" placeholder="Название комнаты" />
+    <input id="newpass" placeholder="Пароль (опционально)" />
+    <button onclick="createRoom()">Создать</button>
+  </div>
+    <!-- Чат -->
+  <div class="section" id="chatbox" style="display:none;">
+    <h3>💬 Чат</h3>
+    <input id="msg" autocomplete="off" placeholder="Сообщение или /ban ник" />
+    <button onclick="sendMessage()">Отправить</button>
+    <ul id="chat"></ul>
+  </div>
+
+  <!-- Список пользователей -->
+  <div class="section" id="users">
+    <h3>👥 Участники комнаты</h3>
+    <ul id="userlist"></ul>
+    <p id="ownerinfo"></p>
+  </div>
+
+  <script>
+    const socket = io();
+    let currentRoom = null;
+
+    function createRoom() {
+      const room = document.getElementById("newroom").value.trim();
+      const password = document.getElementById("newpass").value.trim();
+      if (!room) { alert("Введите название комнаты."); return; }
+      socket.emit("create_room", { room, password });
+    }
+
+    function joinRoom(room, isPrivate) {
+      let password = "";
+      if (isPrivate) { password = prompt("Введите пароль для комнаты " + room); }
+      socket.emit("join_room", { room, password });
+    }
+
+    socket.on("room_error", msg => alert(msg));
+
+    socket.on("room_list", list => {
+      const openContainer = document.getElementById("openRooms");
+      const privateContainer = document.getElementById("privateRooms");
+      openContainer.innerHTML = "<h4>🔓 Открытые</h4>";
+      privateContainer.innerHTML = "<h4>🔐 Приватные</h4>";
+      list.forEach(room => {
+        const cleanName = room.replace(" [приват]", "").trim();
+        const isPrivate = room.includes("[приват]");
+        const card = document.createElement("div");
+        card.className = "room-card" + (isPrivate ? " private" : "");
+        const title = document.createElement("strong");
+        title.textContent = room;
+        card.appendChild(title);
+        const btn = document.createElement("button");
+        btn.textContent = "Подключиться";
+        btn.onclick = () => joinRoom(cleanName, isPrivate);
+        card.appendChild(btn);
+        if (isPrivate) { privateContainer.appendChild(card); }
+        else { openContainer.appendChild(card); }
+      });
+    });
+
+    socket.on("room_joined", room => {
+      currentRoom = room;
+      document.getElementById("chatbox").style.display = "block";
+      document.getElementById("chat").innerHTML = "";
+    });
+
+    socket.on("message", msg => {
+      const li = document.createElement("li");
+      li.textContent = msg;
+      document.getElementById("chat").appendChild(li);
+    });
+
+    socket.on("userlist", data => {
+      const ul = document.getElementById("userlist");
+      ul.innerHTML = "";
+      data.users.forEach(u => {
+        const li = document.createElement("li");
+        li.textContent = u;
+        ul.appendChild(li);
+      });
+      document.getElementById("ownerinfo").innerHTML = `👑 Владелец: <span class="owner">${data.owner}</span>`;
+    });
+
+    function sendMessage() {
+      const input = document.getElementById("msg");
+      socket.send(input.value);
+      input.value = "";
+    }
+
+    // Админ кнопка
+    document.getElementById("adminBtn").onclick = () => {
+      const pass = prompt("Введите пароль администратора:");
+      if (pass) { socket.emit("admin_login", { password: pass }); }
+    };
+
+    socket.on("admin_success", msg => alert(msg));
+    socket.on("admin_error", msg => alert(msg));
+
+    // Пример функций для админа
+    function banIp(ip) {
+      const reason = prompt("Причина блокировки:");
+      socket.emit("admin_ban", { ip, reason });
+    }
+
+    function toggleGlobalBlock(enable) {
+      const reason = prompt("Причина глобальной блокировки:");
+      socket.emit("admin_global_block", { enabled: enable, reason });
+    }
+
+    // Редирект в админ-панель
+    socket.on("redirect_admin", url => {
+      window.location.href = url;
+    });
+  </script>
+</body>
+</html>

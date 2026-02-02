@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>🔑 Панель администратора</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #1a1f2b, #0d1117);
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+    h2 {
+      text-align: center;
+      color: #ff7b72;
+      margin-bottom: 20px;
+      text-shadow: 0 0 8px rgba(255,123,114,0.6);
+    }
+    .section {
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      background: rgba(22,27,34,0.85);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .section:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+    .section h3 {
+      margin-top: 0;
+      color: #79c0ff;
+      border-bottom: 1px solid #30363d;
+      padding-bottom: 5px;
+    }
+    input, button {
+      margin: 5px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #e6edf3;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    input:focus { border-color: #58a6ff; box-shadow: 0 0 8px rgba(88,166,255,0.6); outline: none; }
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #ff7b72, #f85149);
+      border: none;
+      color: #fff;
+      font-weight: bold;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    button:hover { transform: scale(1.05); box-shadow: 0 0 12px rgba(255,123,114,0.6); }
+    .user-card {
+      border: 1px solid #30363d;
+      padding: 8px;
+      margin: 6px 0;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #21262d, #161b22);
+    }
+    .user-card strong { color: #58a6ff; }
+    .user-card span { color: #9aa4ad; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h2>🔑 Панель администратора</h2>
+  <p>Вы вошли как <strong>{{ username }}</strong></p>
+
+  <!-- Блокировка IP -->
+  <div class="section">
+    <h3>⛔ Заблокировать IP</h3>
+    <input id="banIp" placeholder="Введите IP" />
+    <input id="banReason" placeholder="Причина блокировки" />
+    <button onclick="banIp()">Заблокировать</button>
+  </div>
+
+  <!-- Глобальная блокировка -->
+  <div class="section">
+    <h3>🌐 Глобальная блокировка</h3>
+    <input id="globalReason" placeholder="Причина" />
+    <button onclick="toggleGlobalBlock(true)">Включить</button>
+    <button onclick="toggleGlobalBlock(false)">Отключить</button>
+  </div>
+
+  <!-- Список пользователей -->
+  <div class="section">
+    <h3>👥 Список пользователей</h3>
+    <button onclick="loadUsers()">Обновить список</button>
+    <div id="userlist"></div>
+  </div>
+
+  <script>
+    const socket = io();
+
+    function banIp() {
+      const ip = document.getElementById("banIp").value.trim();
+      const reason = document.getElementById("banReason").value.trim();
+      if (!ip) { alert("Введите IP."); return; }
+      socket.emit("admin_ban", { ip, reason });
+    }
+
+    function toggleGlobalBlock(enable) {
+      const reason = document.getElementById("globalReason").value.trim();
+      socket.emit("admin_global_block", { enabled: enable, reason });
+    }
+
+    function loadUsers() {
+      socket.emit("get_all_users");
+    }
+
+    socket.on("admin_success", msg => alert(msg));
+    socket.on("admin_error", msg => alert(msg));
+
+    // список пользователей с IP
+    socket.on("all_users", list => {
+      const container = document.getElementById("userlist");
+      container.innerHTML = "";
+      list.forEach(user => {
+        const card = document.createElement("div");
+        card.className = "user-card";
+        card.innerHTML = `<strong>${user.nickname}</strong> <span>(IP: ${user.ip})</span>`;
+        container.appendChild(card);
+      });
+    });
+  </script>
+</body>
+</html>
